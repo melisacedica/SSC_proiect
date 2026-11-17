@@ -12,3 +12,8 @@ Clipuri/websites folosite pentru research:
 https://github.com/nothings/stb/blob/master/stb_image_write.h (libraria aceasta ia rezultatul matematic si il transforma in poza si il scrie inapoi pe disc)
 -https://www.youtube.com/watch?v=-AuwMJAqjJc(Gaussian Blur)
 -https://www.youtube.com/watch?v=uihBwtPIBxM(Filtrul Sobel)
+
+2.Cuda
+-https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/intro-to-cuda-cpp.html
+-https://www.youtube.com/watch?v=2NgpYFdsduY
+-https://www.youtube.com/watch?v=XYrPJbdswvw
