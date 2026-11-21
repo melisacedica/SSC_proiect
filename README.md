@@ -18,3 +18,4 @@ https://github.com/nothings/stb/blob/master/stb_image_write.h (libraria aceasta 
 -https://www.youtube.com/watch?v=2NgpYFdsduY
 -https://www.youtube.com/watch?v=XYrPJbdswvw
 -https://docs.nvidia.com/cuda/cuda-runtime-api/cuda_runtime_api/group__CUDART__DEVICE.html
+-https://docs.nvidia.com/cuda/cuda-runtime-api/cuda_runtime_api/group__CUDART__EVENT.html
