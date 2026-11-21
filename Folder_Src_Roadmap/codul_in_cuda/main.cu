@@ -46,53 +46,36 @@ __global__ void gaussianBlurKernel(unsigned char* d_input, unsigned char* d_outp
 
     // Omit marginile pozei ca sa nu fie probleme la kernel
     if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
-        int k[3][3] = {
-            {1, 2, 1},
-            {2, 4, 2},
-            {1, 2, 1}
-        };
-
-        int sum = 0;
-        for (int ky = -1; ky <= 1; ky++) {
-            for (int kx = -1; kx <= 1; kx++) {
-                int val = d_input[(y + ky) * width + (x + kx)];
-                sum += val * k[ky + 1][kx + 1];
-            }
-        }
+        int sum =
+            d_input[(y - 1) * width + (x - 1)] * 1 +
+            d_input[(y - 1) * width + x] * 2 +
+            d_input[(y - 1) * width + (x + 1)] * 1 +
+            d_input[y * width + (x - 1)] * 2 +
+            d_input[y * width + x] * 4 +
+            d_input[y * width + (x + 1)] * 2 +
+            d_input[(y + 1) * width + (x - 1)] * 1 +
+            d_input[(y + 1) * width + x] * 2 +
+            d_input[(y + 1) * width + (x + 1)] * 1;
 
         d_output[y * width + x] = (unsigned char)(sum / 16);
     }
 }
 __global__ void sobelKernel(unsigned char* d_input, unsigned char* d_output, int width, int height) {
-
-
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
-        int Gx[3][3] = {
-            {-1, 0, 1},
-            {-2, 0, 2},
-            {-1, 0, 1}
-        };
-        int Gy[3][3] = {
-            {-1, -2, -1},
-            { 0,  0,  0},
-            { 1,  2,  1}
-        };
+        int tl = d_input[(y - 1) * width + (x - 1)];
+        int t = d_input[(y - 1) * width + x];
+        int tr = d_input[(y - 1) * width + (x + 1)];
+        int l = d_input[y * width + (x - 1)];
+        int r = d_input[y * width + (x + 1)];
+        int bl = d_input[(y + 1) * width + (x - 1)];
+        int b = d_input[(y + 1) * width + x];
+        int br = d_input[(y + 1) * width + (x + 1)];
 
-        int valx = 0;
-        int valy = 0;
-
-        for (int ky = -1; ky <= 1; ky++) {
-            for (int kx = -1; kx <= 1; kx++) {
-                int indexVecin = (y + ky) * width + (x + kx);
-                int val = d_input[indexVecin];
-
-                valx += val * Gx[ky + 1][kx + 1];
-                valy += val * Gy[ky + 1][kx + 1];
-            }
-        }
+        int valx = -tl + tr - 2 * l + 2 * r - bl + br;
+        int valy = -tl - 2 * t - tr + bl + 2 * b + br;
 
         int magnitudine = (int)sqrtf((float)(valx * valx + valy * valy));
         if (magnitudine > 255) magnitudine = 255;
@@ -115,7 +98,14 @@ int main() {
     const char* nume_blur[] = { "blur_720p.jpg", "blur_1080p.jpg", "blur_4k.jpg" };
     const char* nume_sobel[] = { "sobel_720p.jpg", "sobel_1080p.jpg", "sobel_4k.jpg" };
 
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
     for (int i = 0; i < 3; i++) {
+
+        float timp_gray = 0.0f, timp_blur = 0.0f, timp_sobel = 0.0f;
+
         printf("Se proceseaza poza:%s \n", input_poza[i]);
 
         //Acestea sunt ca la cpu, luate din librariile de r/w de imagini
@@ -151,16 +141,28 @@ int main() {
         dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
 
         // 1. rgb->grayscale
+        cudaEventRecord(start);
         greyscaleKernel << <gridSize, blockSize >> > (input_rgb, out_grayscale, width, height);
         cudaDeviceSynchronize();
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&timp_gray, start, stop);
 
         // 2. grayscale->gaussian
+        cudaEventRecord(start);
         gaussianBlurKernel << <gridSize, blockSize >> > (out_grayscale, out_gaussianblur, width, height);
         cudaDeviceSynchronize();
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&timp_blur, start, stop);
 
         // 3.gaussian->sobel
+        cudaEventRecord(start);
         sobelKernel << <gridSize, blockSize >> > (out_gaussianblur, out_sobel, width, height);
         cudaDeviceSynchronize();
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&timp_sobel, start, stop);
 
         // Aici aduc pozele inapoi pe disc
         cudaMemcpy(img_gray, out_grayscale, pixels * 1 * sizeof(unsigned char), cudaMemcpyDeviceToHost);
@@ -182,8 +184,14 @@ int main() {
         free(img_blurred);
         free(img_sobel);
         stbi_image_free(img1);
+        printf("Grayscale: %.4f ms,Gaussian: %.4f ms,Sobel: %.4f ms\n", timp_gray, timp_blur, timp_sobel);
     }
-
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
 
     return 0;
 }
+
+//Inainte de eficientizare dura 7 secunde sa se compileze.
+// 
+//im show, sa scot forurile ( sa fac profiling, sa vad cat dureaza fiecare kernel)
